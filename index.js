@@ -17,7 +17,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-const uri = "mongodb+srv://groupUser:UJHopdxwFoaSXnhk@cluster0.hiprwon.mongodb.net/?retryWrites=true&w=majority";
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hiprwon.mongodb.net/?retryWrites=true&w=majority`;
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
@@ -41,9 +41,9 @@ async function run() {
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
-    res.send('Car Doctor server is running');
+    res.send('Server is running');
 })
 
 app.listen(port, () => {
-    console.log(`Car Doctor server is listening at ${port}`);
+    console.log(`Server is listening at ${port}`);
 })
