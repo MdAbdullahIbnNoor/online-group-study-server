@@ -10,7 +10,7 @@ const port = process.env.PORT || 5000;
 
 // middleware
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: ['https://online-group-study.web.app', 'https://online-group-study.firebaseapp.com'],
     credentials: true
 }));
 
@@ -52,7 +52,7 @@ const verifyToken = (req, res, next) => {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const assignmentCollection = client.db('groupStudy').collection('assignments');
         const myAssignmentCollection = client.db('groupStudy').collection('myAssignments');
@@ -91,14 +91,14 @@ async function run() {
             res.send(result);
         });
 
-        app.get('/assignment/update/:id', async (req, res) => {
+        app.get('/assignment/update/:id',logger, verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await assignmentCollection.findOne(query);
             res.send(result);
         })
 
-        app.put('/assignment/update/:id', async (req, res) => {
+        app.put('/assignment/update/:id',logger, verifyToken, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const updatedAssignment = req.body;
@@ -122,6 +122,13 @@ async function run() {
                 console.error('Error updating assignment:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
+        })
+
+        app.delete('/assignment/:id',logger, verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await assignmentCollection.deleteOne(query);
+            res.send(result);
         })
 
         app.post('/myAssignment', logger, verifyToken, async (req, res) => {
@@ -203,17 +210,12 @@ async function run() {
             res.send(result);
         })
 
-        app.delete('/myAssignment/:id',logger, verifyToken, async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) }
-            const result = await myAssignmentCollection.deleteOne(query);
-            res.send(result);
-        })
+        
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
