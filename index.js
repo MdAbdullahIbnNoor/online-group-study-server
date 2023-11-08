@@ -1,14 +1,21 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
 
 
+// middleware
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    credentials: true
+}));
 
-app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hiprwon.mongodb.net/?retryWrites=true&w=majority`;
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -20,6 +27,28 @@ const client = new MongoClient(uri, {
     }
 });
 
+// middlewares
+const logger = async (req, res, next) => {
+    console.log('called:', req.host, req.originalUrl)
+    next();
+}
+
+const verifyToken = (req, res, next) => {
+    const token = req?.cookies?.token;
+    // console.log('token in the middleware', token);
+    // no token available 
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).send({ message: 'unauthorized access' })
+        }
+        req.user = decoded;
+        next();
+    })
+}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -28,6 +57,27 @@ async function run() {
         const assignmentCollection = client.db('groupStudy').collection('assignments');
         const myAssignmentCollection = client.db('groupStudy').collection('myAssignments');
 
+        // jwt authorization
+        app.post('/jwt', logger, async (req, res) => {
+            const user = req.body;
+            console.log('user for token', user);
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'none'
+            })
+                .send({ success: true });
+        })
+
+        app.post('/logout', async (req, res) => {
+            const user = req.body;
+            console.log('logging out', user);
+            res.clearCookie('token', { maxAge: 0 }).send({ success: true })
+        })
+
+        // crud operation
         app.get('/assignment', async (req, res) => {
             const cursor = assignmentCollection.find();
             const result = await cursor.toArray();
@@ -74,20 +124,20 @@ async function run() {
             }
         })
 
-        app.post('/myAssignment', async (req, res) => {
+        app.post('/myAssignment', logger, verifyToken, async (req, res) => {
             const assignment = req.body;
             console.log(assignment);
             const result = await myAssignmentCollection.insertOne(assignment);
             res.send(result);
         });
 
-        app.get('/myAssignment', async (req, res) => {
+        app.get('/myAssignment', logger, verifyToken, async (req, res) => {
             const cursor = myAssignmentCollection.find();
             const result = await cursor.toArray();
             res.send(result);
         });
 
-        app.get('/myAssignment/filter', async (req, res) => {
+        app.get('/myAssignment/filter', logger, verifyToken, async (req, res) => {
             const { status } = req.query; // Get the 'status' query parameter
 
             const query = { status: status }
@@ -97,7 +147,17 @@ async function run() {
             res.json(result);
         });
 
-        app.put('/myAssignment/:id', async (req, res) => {
+        app.get('/myAssignment/filterbyemail', logger, verifyToken, async (req, res) => {
+            const { email } = req.query; // Get the 'status' query parameter
+
+            const query = { submittedBy: email }
+            const result = await myAssignmentCollection.find(query).toArray();
+            // console.log(result, email);
+
+            res.json(result);
+        });
+
+        app.put('/myAssignment/:id', logger, verifyToken, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const updatedAssignment = req.body;
@@ -127,7 +187,7 @@ async function run() {
             }
         })
 
-        app.patch('/myAssignment/markUpdate/:id', async (req, res) => {
+        app.patch('/myAssignment/markUpdate/:id',logger, verifyToken, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const updatedAssignment = req.body;
@@ -143,7 +203,7 @@ async function run() {
             res.send(result);
         })
 
-        app.delete('/myAssignment/:id', async (req, res) => {
+        app.delete('/myAssignment/:id',logger, verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await myAssignmentCollection.deleteOne(query);
